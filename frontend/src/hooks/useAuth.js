@@ -12,17 +12,7 @@ export function AuthProvider({ children }) {
     if (token) {
       authAPI.me()
         .then(res => setUser(res.data.user))
-        .catch((err) => {
-          console.warn('Initial auth check failed, using bypass for load', err);
-          // Only bypass if we have a token (presumably from a previous login)
-          setUser({
-            _id: 'user_1',
-            username: 'alex_m',
-            displayName: 'Alex Morgan',
-            email: 'alex@example.com',
-            avatarColor: '#6366f1'
-          });
-        })
+        .catch(() => localStorage.removeItem('sc_token'))
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
@@ -30,46 +20,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (email, password) => {
-    try {
-      const res = await authAPI.login({ email, password });
-      localStorage.setItem('sc_token', res.data.token);
-      setUser(res.data.user);
-      return res.data.user;
-    } catch (err) {
-      console.warn('Backend login failed, using bypass mode', err);
-      // BYPASS: If backend fails, use mock alex user
-      const mockUser = {
-        _id: 'user_1',
-        username: 'alex_m',
-        displayName: 'Alex Morgan',
-        email: email || 'alex@example.com',
-        avatarColor: '#6366f1'
-      };
-      localStorage.setItem('sc_token', 'mock_token_bypass');
-      setUser(mockUser);
-      return mockUser;
-    }
+    const res = await authAPI.login({ email, password });
+    localStorage.setItem('sc_token', res.data.token);
+    setUser(res.data.user);
+    return res.data.user;
   }, []);
 
   const register = useCallback(async (data) => {
-    try {
-      const res = await authAPI.register(data);
-      localStorage.setItem('sc_token', res.data.token);
-      setUser(res.data.user);
-      return res.data.user;
-    } catch (err) {
-      console.warn('Backend registration failed, using bypass mode', err);
-      const mockUser = {
-        _id: 'user_new',
-        username: data.username || 'new_user',
-        displayName: data.displayName || 'New User',
-        email: data.email || 'new@example.com',
-        avatarColor: '#10b981'
-      };
-      localStorage.setItem('sc_token', 'mock_token_bypass');
-      setUser(mockUser);
-      return mockUser;
-    }
+    const res = await authAPI.register(data);
+    localStorage.setItem('sc_token', res.data.token);
+    setUser(res.data.user);
+    return res.data.user;
   }, []);
 
   const logout = useCallback(() => {

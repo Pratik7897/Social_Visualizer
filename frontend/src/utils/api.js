@@ -18,7 +18,7 @@ api.interceptors.response.use(
   err => {
     if (err.response?.status === 401) {
       localStorage.removeItem('sc_token');
-      // window.location.href = '/login'; // Disabled to prevent redirect loops in bypass mode
+      window.location.href = '/login';
     }
     return Promise.reject(err);
   }
