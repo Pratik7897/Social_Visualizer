@@ -1,0 +1,17 @@
+{
+  "name": "socialconnect",
+  "version": "1.0.0",
+  "description": "Social Network platform powered by advanced data structures",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "build": "npm run install:all && cd frontend && npm run build",
+    "seed": "cd backend && node src/seed/seedData.js",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm start",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "start": "concurrently \"npm run backend\" \"npm run frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
