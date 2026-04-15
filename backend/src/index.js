@@ -21,14 +21,21 @@ const app = express();
 app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000', credentials: true }));
 app.use(express.json());
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/friends', require('./routes/friends'));
-app.use('/api/posts', require('./routes/posts'));
-app.use('/api/ds', require('./routes/ds'));
+// Routes - Mounted twice for Vercel prefix-agnostic support
+const routes = {
+  auth: require('./routes/auth'),
+  users: require('./routes/users'),
+  friends: require('./routes/friends'),
+  posts: require('./routes/posts'),
+  ds: require('./routes/ds')
+};
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', message: 'SocialConnect API running' }));
+Object.entries(routes).forEach(([name, router]) => {
+  app.use(`/_/backend/${name}`, router);
+  app.use(`/${name}`, router); // Fallback for prefix-stripped requests
+});
+
+app.get(['/_/backend/health', '/health'], (req, res) => res.json({ status: 'ok', message: 'SocialConnect API running' }));
 
 // Serve static files from frontend build in production
 if (process.env.NODE_ENV === 'production') {
@@ -36,7 +43,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // 404 Handler for unknown API routes
-app.use('/api/*', (req, res) => {
+app.use(['/_/backend/*', '/api/*'], (req, res) => {
   res.status(404).json({ message: `API route not found: ${req.originalUrl}` });
 });
 
