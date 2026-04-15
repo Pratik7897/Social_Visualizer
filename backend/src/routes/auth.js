@@ -4,7 +4,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { getAVLTree } = require('../ds/AVLTree');
 
-const generateToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+const JWT_SECRET = process.env.JWT_SECRET || 'socialconnect_super_secret_demo_key';
+const generateToken = (id) => jwt.sign({ id }, JWT_SECRET, { expiresIn: '7d' });
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {

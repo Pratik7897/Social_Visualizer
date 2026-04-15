@@ -12,54 +12,18 @@ const User = require('./models/User');
 const Friendship = require('./models/Friendship');
 const Post = require('./models/Post');
 
-// Mock data for fallback
-const mockData = require('./mock/mockData');
-
 const app = express();
 
 // Middleware
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: process.env.FRONTEND_URL || '*', credentials: true }));
 app.use(express.json());
 
-// Routes - Mounted twice for Vercel prefix-agnostic support
-const routes = {
-  auth: require('./routes/auth'),
-  users: require('./routes/users'),
-  friends: require('./routes/friends'),
-  posts: require('./routes/posts'),
-  ds: require('./routes/ds')
-};
-
-Object.entries(routes).forEach(([name, router]) => {
-  app.use(`/_/backend/${name}`, router);
-  app.use(`/${name}`, router); // Fallback for prefix-stripped requests
-});
-
-app.get(['/_/backend/health', '/health'], (req, res) => res.json({ status: 'ok', message: 'SocialConnect API running' }));
-
-// Serve static files from frontend build in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.resolve(__dirname, '../../frontend/build')));
-}
-
-// 404 Handler for unknown API routes
-app.use(['/_/backend/*', '/api/*'], (req, res) => {
-  res.status(404).json({ message: `API route not found: ${req.originalUrl}` });
-});
-
-// For any other request, servce index.html (SPA support)
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, '../../frontend/build/index.html'));
-  });
-}
-
-// Connect to MongoDB and initialize data structures
-// Connect to MongoDB with a short timeout to fail fast and trigger MOCK_MODE
-const PORT = process.env.PORT || 5050;
-const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/socialconnect';
+// --- LAZY INITIALIZATION SYSTEM ---
+let dsInitialized = false;
+let dsInitializing = false;
 
 async function initDataStructures(isMock = false) {
+  if (dsInitialized) return;
   console.log(`\n[DS Init] Building in-memory data structures from ${isMock ? 'MOCK data' : 'database'}...`);
   try {
     let users, friendships, posts;
@@ -79,26 +43,96 @@ async function initDataStructures(isMock = false) {
     buildGraphFromFriendships(users, friendships);
     buildBTreeFromPosts(posts);
 
+    dsInitialized = true;
     console.log(`[DS Init] All data structures ready ${isMock ? '(MOCK MODE)' : '✓'}\n`);
   } catch (err) {
     console.error('[DS Init] Error:', err.message);
   }
 }
 
-mongoose.connect(MONGO_URI, { 
-  serverSelectionTimeoutMS: 5000 // 5 seconds timeout vs default 30s
-})
-  .then(async () => {
-    console.log('MongoDB connected');
-    await initDataStructures();
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  })
-  .catch(async (err) => {
-    console.error('MongoDB connection failed:', err.message);
-    console.log('>>> STARTING IN MOCK MODE (In-memory only) <<<');
-    process.env.MOCK_MODE = 'true';
-    await initDataStructures(true);
-    app.listen(PORT, () => console.log(`Server running on port ${PORT} (MOCK MODE)`));
+// Middleware to ensure DS is ready before any request
+const ensureDSReady = async (req, res, next) => {
+  if (dsInitialized) return next();
+  
+  if (!dsInitializing) {
+    dsInitializing = true;
+    const MONGO_URI = process.env.MONGODB_URI;
+    
+    if (!MONGO_URI || process.env.MOCK_MODE === 'true') {
+       process.env.MOCK_MODE = 'true';
+       await initDataStructures(true);
+       dsInitializing = false;
+       return next();
+    }
+
+    try {
+      await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 3000 });
+      console.log('MongoDB connected (Lazy)');
+      await initDataStructures(false);
+    } catch (err) {
+      console.error('Lazy MongoDB connection failed:', err.message);
+      process.env.MOCK_MODE = 'true';
+      await initDataStructures(true);
+    } finally {
+      dsInitializing = false;
+    }
+  } else {
+    // If already initializing, wait a bit
+    let checks = 0;
+    const interval = setInterval(() => {
+      checks++;
+      if (dsInitialized || checks > 10) {
+        clearInterval(interval);
+        next();
+      }
+    }, 500);
+    return;
+  }
+  next();
+};
+
+app.use(ensureDSReady);
+
+// Routes
+const routes = {
+  auth: require('./routes/auth'),
+  users: require('./routes/users'),
+  friends: require('./routes/friends'),
+  posts: require('./routes/posts'),
+  ds: require('./routes/ds')
+};
+
+Object.entries(routes).forEach(([name, router]) => {
+  app.use(`/_/backend/${name}`, router);
+  app.use(`/${name}`, router); 
+});
+
+app.get(['/_/backend/health', '/health'], (req, res) => res.json({ 
+  status: 'ok', 
+  mockMode: process.env.MOCK_MODE === 'true',
+  initialized: dsInitialized 
+}));
+
+// Static Files
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.resolve(__dirname, '../../frontend/build')));
+  app.get('*', (req, res) => {
+    if (!req.url.startsWith('/_/') && !req.url.startsWith('/api')) {
+      res.sendFile(path.resolve(__dirname, '../../frontend/build/index.html'));
+    }
   });
+}
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('[Global Error]:', err);
+  res.status(500).json({ message: 'Internal Server Error' });
+});
+
+// Local Start (not used on Vercel)
+if (require.main === module) {
+  const PORT = process.env.PORT || 5050;
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
 
 module.exports = app;
