@@ -101,39 +101,66 @@ class SocialGraph {
     if (!this.adjacencyList.has(start)) return { visited: [], layers: [], traversalLog: [] };
 
     const visited = new Set([start]);
-    const queue = [{ id: start, depth: 0 }];
-    const layers = [[]]; // layers[i] = nodes at depth i
     const traversalLog = []; // for visualization
+    const layers = []; // layers[i] = nodes at depth i
     const parent = new Map();
 
-    while (queue.length > 0) {
-      const { id, depth } = queue.shift();
+    // Standard queue-based BFS modified for level-batch log generation
+    let currentLevel = [start];
+    let depth = 0;
+
+    // Log the initial start node discovery/visit if desired
+    traversalLog.push({ node: start, depth: 0, action: 'visit' });
+
+    while (currentLevel.length > 0 && depth < maxDepth) {
+      const nextLevel = [];
+      const currentLevelNodes = [...currentLevel];
+      
+      // Store current layer (excluding layer 0)
       if (depth > 0) {
-        if (!layers[depth]) layers[depth] = [];
-        layers[depth].push(id);
+        layers[depth - 1] = currentLevelNodes;
       }
-      traversalLog.push({ node: id, depth, action: 'visit' });
 
-      if (depth >= maxDepth) continue;
-
-      const neighbors = Array.from(this.adjacencyList.get(id) || new Set()).sort();
-      for (const neighbor of neighbors) {
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          parent.set(neighbor, id);
-          queue.push({ id: neighbor, depth: depth + 1 });
-          traversalLog.push({ node: neighbor, depth: depth + 1, action: 'enqueue', from: id });
+      // For every node in the current level, find its neighbors
+      for (const id of currentLevelNodes) {
+        const neighbors = Array.from(this.adjacencyList.get(id) || new Set()).sort();
+        
+        for (const neighbor of neighbors) {
+          if (!visited.has(neighbor)) {
+            visited.add(neighbor);
+            parent.set(neighbor, id);
+            nextLevel.push(neighbor);
+            
+            // Record discovery (enqueue) for the visualizer
+            traversalLog.push({ node: neighbor, depth: depth + 1, action: 'enqueue', from: id });
+          }
         }
+      }
+
+      // After ALL neighbors of the current level are discovered, 
+      // we move to visiting them in the next iteration.
+      // Now record "visit" for all nodes we just discovered
+      for (const nextNode of nextLevel) {
+        traversalLog.push({ node: nextNode, depth: depth + 1, action: 'visit' });
+      }
+
+      currentLevel = nextLevel;
+      depth++;
+      
+      // Update the layers for the final discovered set
+      if (depth > 0 && currentLevel.length > 0) {
+        layers[depth - 1] = currentLevel;
       }
     }
 
     return {
       visited: Array.from(visited).filter(id => id !== start),
-      layers: layers.slice(1), // remove layer 0 (start node itself)
+      layers: layers,
       traversalLog,
       parent: Object.fromEntries(parent)
     };
   }
+
 
   /**
    * DFS TRAVERSAL
