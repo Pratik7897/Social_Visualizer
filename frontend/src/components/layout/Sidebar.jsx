@@ -78,7 +78,6 @@ export default function Sidebar() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingLeft: 12 }}>
           {[
-            { label: 'AVL Tree', desc: 'Search engine', color: 'var(--accent)' },
             { label: 'Graph', desc: 'Social network', color: 'var(--teal)' },
             { label: 'B-Tree', desc: 'Post indexing', color: 'var(--rose)' },
           ].map(ds => (

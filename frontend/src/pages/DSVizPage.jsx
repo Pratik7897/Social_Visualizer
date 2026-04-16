@@ -1,20 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { dsAPI, postsAPI } from '../utils/api';
-import AVLTreeViz from '../components/dsvis/AVLTreeViz';
 import GraphViz from '../components/dsvis/GraphViz';
+
 import BTreeViz from '../components/dsvis/BTreeViz';
 import { useAuth } from '../hooks/useAuth';
 
 const DS_INFO = {
-  avl: {
-    name: 'AVL Tree',
-    color: '#C17F4A',
-    light: '#F5E6D3',
-    complexity: 'O(log n)',
-    usage: 'User search engine',
-    description: 'Self-balancing BST. Every insertion triggers rotations to keep height ≤ log₂(n). Used for prefix-search over usernames.',
-    properties: ['Height balanced: |BF| ≤ 1', 'Search: O(log n)', 'Insert: O(log n)', 'Rotations keep tree balanced'],
-  },
+
   graph: {
     name: 'Graph (Adjacency List)',
     color: '#3D7A6F',
@@ -38,8 +30,8 @@ const DS_INFO = {
 export default function DSVizPage() {
   const { user } = useAuth();
   const currentUserId = user?.id?.toString();
-  const [tab, setTab] = useState('avl');
-  const [avlData, setAvlData] = useState(null);
+  const [tab, setTab] = useState('graph');
+
   const [graphData, setGraphData] = useState(null);
   const [btreeData, setBtreeData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -65,22 +57,7 @@ export default function DSVizPage() {
   const loadData = async (t) => {
     setLoading(true);
     try {
-      if (t === 'avl') {
-        const res = await dsAPI.getAVL();
-        if (res.data.inorder) {
-          const userMap = {};
-          res.data.inorder.forEach(u => { 
-            // AVL inorder returns { key: username, value: userId }
-            const uid = u.value?.toString();
-            if (uid) userMap[uid] = { id: uid, username: u.key, displayName: u.key }; 
-          });
-          console.log(`[DSViz] Loaded ${Object.keys(userMap).length} users into map`);
-          setAllUsers(userMap);
-          setAvlData(res.data);
-          const shuffled = [...res.data.inorder].sort(() => 0.5 - Math.random()).slice(0, 15);
-          setPendingUsers(shuffled.map(n => n.key));
-        }
-      } else if (t === 'graph') {
+      if (t === 'graph') {
         const res = await dsAPI.getGraph();
         
         let uMap = allUsers;
@@ -115,8 +92,10 @@ export default function DSVizPage() {
       
       // Auto-set Dijkstra FROM to current user if available and in list
       if (t === 'graph' && !dijkstraFrom && currentUserId) {
+        setBtreeData(null); // Just a placeholder to ensure tab state is clean
         setDijkstraFrom(currentUserId);
       }
+
     } catch (err) {
       console.error('Error loading DSViz data:', err);
     } finally {
@@ -359,12 +338,6 @@ export default function DSVizPage() {
               <div className="loading-center" style={{ minHeight: '500px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div className="spinner" /></div>
             ) : (
               <>
-                {/* AVL Tree */}
-                {tab === 'avl' && avlData && (
-                  <div>
-                    <AVLTreeViz initialPending={pendingUsers} speed={speed} />
-                  </div>
-                )}
 
                 {/* Graph */}
                 {tab === 'graph' && graphData && (
@@ -510,11 +483,7 @@ export default function DSVizPage() {
           {/* Why this DS? */}
           <div className="card" style={{ padding: '16px' }}>
             <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: 10 }}>Why {info.name.split(' ')[0]}?</div>
-            {tab === 'avl' && (
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Regular BST can degrade to O(n) on sorted input (e.g., inserting users A→Z alphabetically). AVL self-balancing via rotations guarantees O(log n) always.
-              </p>
-            )}
+
             {tab === 'graph' && (
               <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 Social networks are inherently graph problems. Friendships = undirected edges. BFS levels = degrees of connection. Adjacency list is optimal for sparse graphs.

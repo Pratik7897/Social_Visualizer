@@ -5,7 +5,8 @@ const protect = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ message: 'Not authorized' });
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET || 'socialconnect_super_secret_demo_key';
+    const decoded = jwt.verify(token, secret);
     if (process.env.MOCK_MODE === 'true') {
       const { getMockUsers } = require('../mock/mockData');
       const mockUsers = await getMockUsers();
